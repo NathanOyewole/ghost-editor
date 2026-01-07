@@ -5,7 +5,7 @@
   "scripts": {
     "build:wasm": "wasm-pack build crates/editor-engine --target web --out-dir ../../pkg",
     "dev": "npm run build:wasm && next dev --webpack",
-    "build": "npm run build:wasm && next build",
+    "build": "npm run build:wasm && next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
