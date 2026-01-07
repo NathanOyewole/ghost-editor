@@ -3,6 +3,14 @@
 A high-performance, minimalist text editor built for the modern web. This isn't just a React app—it’s a hybrid **Design + Systems** project utilizing a **Rust-based analysis engine** compiled to **WebAssembly**.
 
 
+## 🖼️ Preview
+<!-- Place the screenshot at: public/ghossty.PNG (note case) -->
+<div style="max-width: 1200px; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; border: 1px solid #222; margin: 0;">
+	<img src="public/ghossty.PNG" alt="Ghost Editor UI Screenshot" style="width: 100%; height: 100%; object-fit: cover; object-position: center; display: block;" />
+  
+</div>
+
+
 
 ## 🚀 The Stack
 * **Frontend:** Next.js 16 (App Router) + TypeScript
