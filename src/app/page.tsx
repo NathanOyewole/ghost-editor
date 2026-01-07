@@ -1,40 +1,96 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Command, Cpu, Zap, Activity, Clock } from 'lucide-react';
-import init, { analyze_text } from '../../pkg/editor_engine';
+import { Command, Cpu, Zap, Activity, Clock, RotateCcw } from 'lucide-react';
+// Make sure this path matches your generated WASM package
+import init, { GhostEngine } from '../../pkg/editor_engine';
 
 export default function GhostEditor() {
   const [text, setText] = useState("");
-  // Updated state to include readingTime
   const [stats, setStats] = useState({ words: 0, chars: 0, lines: 0, readingTime: 0 });
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [wasmReady, setWasmReady] = useState(false);
 
-  // Initialize Rust Engine
+  // Persistent reference to our Rust logic
+  const engineRef = useRef<GhostEngine | null>(null);
+
+  // Initialize Rust Engine and Event Listeners
   useEffect(() => {
-    init().then(() => setWasmReady(true));
-    
+    init().then(() => {
+      engineRef.current = new GhostEngine();
+      setWasmReady(true);
+    });
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Emoji Injection (Triggered by Space)
+      // Note: We check current state via closure or use a fresh ref if needed, 
+      // but standard event listener with direct state access works for basic toggles.
+      if (e.key === ' ' && suggestion) {
+        const lastWord = text.split(/\s/).pop() || "";
+        if (lastWord.startsWith(":")) {
+          e.preventDefault();
+          const words = text.split(" ");
+          words[words.length - 1] = suggestion;
+          const newText = words.join(" ") + " ";
+          setText(newText);
+          updateStats(newText);
+          setSuggestion(null);
+          return;
+        }
+      }
+
+      // 2. ⌘K Menu
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setIsMenuOpen(prev => !prev);
       }
+
+      // 3. ⌘Z Undo (Custom Rust History)
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && engineRef.current) {
+        e.preventDefault();
+        const previousText = engineRef.current.undo();
+        setText(previousText);
+        // Stats update is called inside updateStats
+        const res = engineRef.current.analyze();
+        setStats({ 
+          words: res.words, 
+          chars: res.chars, 
+          lines: res.lines,
+          readingTime: res.reading_time 
+        });
+      }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [text, suggestion]); // Re-bind when text/suggestion changes to keep closure fresh
+
+  const updateStats = (val: string) => {
+    if (engineRef.current) {
+      engineRef.current.update_content(val);
+      const res = engineRef.current.analyze();
+      setStats({ 
+        words: res.words, 
+        chars: res.chars, 
+        lines: res.lines,
+        readingTime: res.reading_time 
+      });
+    }
+  };
 
   const handleTextChange = (val: string) => {
     setText(val);
-    if (wasmReady) {
-      const result = analyze_text(val);
-      setStats({ 
-        words: result.words, 
-        chars: result.chars, 
-        lines: result.lines,
-        readingTime: result.reading_time // Maps to the new field in your Rust struct
-      });
+    updateStats(val);
+
+    // Emoji Autocomplete Logic
+    const lastWord = val.split(/\s/).pop() || "";
+    if (lastWord.startsWith(":") && lastWord.length > 1) {
+      const query = lastWord.slice(1);
+      const emoji = engineRef.current?.suggest_emoji(query);
+      setSuggestion(emoji || null);
+    } else {
+      setSuggestion(null);
     }
   };
 
@@ -49,7 +105,7 @@ export default function GhostEditor() {
         <div className="flex gap-4 items-center text-xs font-mono">
           <span className="flex items-center gap-1.5">
             <Cpu size={14} className={wasmReady ? "text-green-400" : "text-zinc-600"} /> 
-            {wasmReady ? "WASM_READY" : "WASM_LOADING"}
+            {wasmReady ? "WASM_ENGINE_LIVE" : "WASM_LOADING"}
           </span>
           <span className="text-zinc-700">|</span>
           <span className="flex items-center gap-1.5"><Command size={14} /> ⌘K for Menu</span>
@@ -57,7 +113,23 @@ export default function GhostEditor() {
       </nav>
 
       {/* Editor Area */}
-      <div className="max-w-4xl mx-auto mt-12 px-6">
+      <div className="max-w-4xl mx-auto mt-12 px-6 relative">
+        {/* Emoji Suggestion Popover */}
+        <AnimatePresence>
+          {suggestion && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute -top-12 left-6 bg-zinc-900 border border-purple-500/30 px-4 py-2 rounded-xl shadow-xl shadow-purple-500/10 flex items-center gap-3 z-20"
+            >
+              <span className="text-xs font-medium text-zinc-400">Suggest:</span>
+              <span className="text-2xl">{suggestion}</span>
+              <kbd className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500 border border-white/5">SPACE</kbd>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <textarea
           autoFocus
           value={text}
@@ -67,7 +139,7 @@ export default function GhostEditor() {
         />
       </div>
 
-      {/* Floating Stats (Updated with Reading Time & Animations) */}
+      {/* Floating Stats */}
       <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-zinc-900/40 backdrop-blur-2xl border border-white/5 rounded-2xl shadow-2xl">
         <div className="flex flex-col items-start min-w-[60px]">
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Words</span>
@@ -79,6 +151,21 @@ export default function GhostEditor() {
           >
             {stats.words}
           </motion.span>
+        </div>
+
+        <div className="h-8 w-[1px] bg-white/10" />
+
+        <div className="flex flex-col items-start min-w-[80px]">
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">History</span>
+          <button 
+            onClick={() => {
+              const prev = engineRef.current?.undo();
+              if (prev !== undefined) setText(prev);
+            }}
+            className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors mt-1"
+          >
+            <RotateCcw size={14} /> <span className="text-xs font-mono">Undo</span>
+          </button>
         </div>
 
         <div className="h-8 w-[1px] bg-white/10" />
@@ -120,7 +207,14 @@ export default function GhostEditor() {
                   <span>Format with Prettier</span>
                   <span className="text-zinc-600">⌥⇧F</span>
                 </div>
-                <div className="p-3 hover:bg-white/5 rounded-xl cursor-pointer flex justify-between">
+                <div className="p-3 hover:bg-white/5 rounded-xl cursor-pointer flex justify-between"
+                  onClick={() => {
+                    if(engineRef.current) {
+                      const res = engineRef.current.analyze();
+                      alert(`Words: ${res.words}, Chars: ${res.chars}`);
+                    }
+                  }}
+                >
                   <span>Analyze Complexity (Rust)</span>
                   <span className="text-zinc-600">⌘R</span>
                 </div>
