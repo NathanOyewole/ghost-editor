@@ -1,0 +1,11 @@
+[package]
+name = "editor-engine"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+# This is the "Magic Sauce" the error was asking for
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
