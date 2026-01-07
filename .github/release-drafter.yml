@@ -1,0 +1,18 @@
+name-template: 'v$RESOLVED_VERSION 👻'
+tag-template: 'v$RESOLVED_VERSION'
+categories:
+  - title: '🚀 New Features'
+    labels:
+      - 'feature'
+      - 'feat'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'fix'
+      - 'bug'
+  - title: '🧰 Maintenance'
+    labels:
+      - 'chore'
+      - 'docs'
+template: |
+  ## What’s Changed in this Ghost Build?
+  $CHANGES
